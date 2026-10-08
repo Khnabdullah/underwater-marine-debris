@@ -1,220 +1,358 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   UploadCloud,
-  BarChart2,
   Download,
-  Eye,
-  EyeOff,
-  RefreshCw,
   AlertCircle,
   FolderOpen,
   Loader2,
   Scan,
-  Volume2,
-  VolumeX,
-  Target
+  RefreshCw,
+  Copy,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  ShieldAlert,
+  BarChart2,
+  ExternalLink,
+  Info,
 } from 'lucide-react';
+import { useAnalysis } from '../../context/AnalysisContext';
+import ImageViewer from '../common/ImageViewer';
+import StatusBadge from '../common/StatusBadge';
 
-export default function ImageAnalysisWorkbench() {
-  const [selectedImage, setSelectedImage] = useState(null);
+export default function ImageAnalysisWorkbench({ onNavigate }) {
+  const {
+    settings,
+    currentAnalysis,
+    setCurrentAnalysis,
+    addHistoryItem,
+    enhancedImageTransfer,
+    setEnhancedImageTransfer,
+    backendStatus,
+  } = useAnalysis();
+
+  const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
-  const [viewMode, setViewMode] = useState('annotated'); // 'annotated' or 'original'
-  const [confidenceThreshold, setConfidenceThreshold] = useState(20);
   const [error, setError] = useState(null);
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [hoveredDetId, setHoveredDetId] = useState(null);
+  const [showTechnicalInfo, setShowTechnicalInfo] = useState(false);
+  const [copiedJson, setCopiedJson] = useState(false);
+  const [confidenceFilter, setConfidenceFilter] = useState(settings.defaultConfidenceThreshold || 5);
+  const [imageMeta, setImageMeta] = useState(null);
 
   const fileInputRef = useRef(null);
 
-  // Synthesize an acoustic sonar chime for tactile scan feedback
-  const playSonarPing = () => {
-    if (!soundEnabled) return;
-    try {
-      const AudioCtx = window.AudioContext || window.webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, ctx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.32);
-      gain.gain.setValueAtTime(0.06, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.32);
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      osc.start();
-      osc.stop(ctx.currentTime + 0.32);
-    } catch {
-      // Audio autoplay policy handled gracefully
+  // If coming from Underwater Enhancement with an enhanced image:
+  useEffect(() => {
+    if (enhancedImageTransfer) {
+      setPreviewUrl(enhancedImageTransfer.dataUrl);
+      setSelectedFile({
+        name: enhancedImageTransfer.filename || 'enhanced-survey-image.jpg',
+        isEnhanced: true,
+        blob: enhancedImageTransfer.blob,
+      });
+      setAnalysisResult(null);
+      setError(null);
+      // Clear transfer after consuming
+      setEnhancedImageTransfer(null);
     }
-  };
+  }, [enhancedImageTransfer, setEnhancedImageTransfer]);
 
-  // Handle file selection from user
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
+  // If an analysis was loaded from history/dashboard:
+  useEffect(() => {
+    if (currentAnalysis && currentAnalysis.originalImage && !analysisResult) {
+      setPreviewUrl(currentAnalysis.originalImage);
+      setSelectedFile({
+        name: currentAnalysis.filename,
+        fromHistory: true,
+      });
+      setAnalysisResult({
+        numDetections: currentAnalysis.numDetections,
+        detections: currentAnalysis.detections,
+        annotatedImage: currentAnalysis.annotatedImage,
+        rawJson: currentAnalysis.rawJson || null,
+        durationMs: currentAnalysis.durationMs,
+        timestamp: currentAnalysis.displayDate || currentAnalysis.timestamp,
+        isFromHistory: true,
+      });
+    }
+  }, [currentAnalysis, analysisResult]);
+
+  // Handle file validation and loading
+  const processImageFile = (file) => {
     if (!file) return;
 
-    if (!file.type.startsWith('image/')) {
-      setError('Please select a valid image format (JPG, PNG, WebP).');
+    // Format validation
+    const validTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    if (!validTypes.includes(file.type) && !file.name.match(/\.(jpg|jpeg|png|webp)$/i)) {
+      setError('Please select a valid underwater image file (JPG, PNG, WebP).');
+      return;
+    }
+
+    // Size validation (25MB limit)
+    const MAX_SIZE = 25 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      setError('Selected image exceeds the 25MB maximum size limit.');
       return;
     }
 
     setError(null);
-    setSelectedImage({
-      file,
-      name: file.name,
-      isCustom: true,
-    });
-    setPreviewUrl(URL.createObjectURL(file));
+    setSelectedFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setPreviewUrl(objectUrl);
     setAnalysisResult(null);
+    setCurrentAnalysis(null);
+
+    // Read natural image dimensions
+    const img = new Image();
+    img.onload = () => {
+      setImageMeta({
+        width: img.naturalWidth,
+        height: img.naturalHeight,
+        sizeBytes: file.size,
+      });
+    };
+    img.src = objectUrl;
   };
 
-  // Run AI Analysis
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file) processImageFile(file);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) processImageFile(file);
+  };
+
+  // Run Inference against backend
   const handleAnalyze = async () => {
-    if (!previewUrl) return;
+    if (!previewUrl || (!selectedFile && !enhancedImageTransfer)) return;
 
     setIsAnalyzing(true);
     setError(null);
+    const startTime = performance.now();
 
     try {
-      // 1. If user uploaded a custom file, attempt to send to local FastAPI backend if alive
-      if (selectedImage?.file) {
-        try {
-          const formData = new FormData();
-          formData.append('file', selectedImage.file);
+      const formData = new FormData();
 
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-          const res = await fetch('http://localhost:8000/predict', {
-            method: 'POST',
-            body: formData,
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-
-          if (res.ok) {
-            const data = await res.json();
-            if (data.success) {
-              setAnalysisResult({
-                isLiveBackend: true,
-                numDetections: data.num_detections,
-                detections: data.detections,
-                annotatedImage: `data:image/jpeg;base64,${data.annotated_image}`,
-                debrisDensity: data.num_detections > 4 ? 'High Density Zone' : data.num_detections > 1 ? 'Moderate Density' : 'Low Presence',
-                densityScore: (data.num_detections * 0.18).toFixed(2),
-                timestamp: new Date().toLocaleTimeString(),
-              });
-              setIsAnalyzing(false);
-              playSonarPing();
-              return;
-            }
-          }
-        } catch (apiErr) {
-          console.error('FastAPI backend failed:', apiErr);
-          setError(`Cannot reach backend at localhost:8000. Is it running? (${apiErr.message})`);
-          setIsAnalyzing(false);
-          return;
-        }
+      if (selectedFile?.blob) {
+        // Blob from enhanced canvas
+        formData.append('file', selectedFile.blob, selectedFile.name);
+      } else if (selectedFile instanceof File) {
+        formData.append('file', selectedFile);
+      } else if (previewUrl.startsWith('data:')) {
+        // Data URL conversion
+        const res = await fetch(previewUrl);
+        const blob = await res.blob();
+        formData.append('file', blob, selectedFile?.name || 'survey-image.jpg');
+      } else if (previewUrl.startsWith('blob:')) {
+        const res = await fetch(previewUrl);
+        const blob = await res.blob();
+        formData.append('file', blob, selectedFile?.name || 'survey-image.jpg');
       } else {
-        // If no file, just show error
-        setError('Please upload an image first.');
-        setIsAnalyzing(false);
-        return;
+        throw new Error('Unable to package image file for inference.');
+      }
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s timeout
+
+      const endpoint = settings.backendUrl || 'http://localhost:8000/predict';
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const endTime = performance.now();
+      const durationMs = Math.round(endTime - startTime);
+
+      if (!response.ok) {
+        let errorMsg = `Server returned HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errData = await response.json();
+          if (errData?.error) errorMsg = errData.error;
+        } catch {}
+        throw new Error(errorMsg);
+      }
+
+      const data = await response.json();
+
+      if (!data.success && data.error) {
+        throw new Error(data.error);
+      }
+
+      // Format detections list
+      const detections = data.detections || [];
+      const annotatedImageUrl = data.annotated_image
+        ? `data:image/jpeg;base64,${data.annotated_image}`
+        : previewUrl;
+
+      // Class breakdown calculation from actual returned detections
+      const breakdown = detections.reduce((acc, d) => {
+        const cls = d.class || 'plastic';
+        acc[cls] = (acc[cls] || 0) + 1;
+        return acc;
+      }, {});
+
+      const resultPayload = {
+        numDetections: data.num_detections ?? detections.length,
+        detections: detections,
+        annotatedImage: annotatedImageUrl,
+        originalImage: previewUrl,
+        filename: selectedFile?.name || 'Survey_Image.jpg',
+        durationMs,
+        rawJson: data,
+        classBreakdown: breakdown,
+        timestamp: new Date().toLocaleTimeString(),
+      };
+
+      setAnalysisResult(resultPayload);
+
+      // Save to global state & persistent history
+      setCurrentAnalysis(resultPayload);
+      if (settings.autoSaveHistory) {
+        addHistoryItem({
+          type: 'image',
+          filename: selectedFile?.name || 'Survey_Image.jpg',
+          numDetections: resultPayload.numDetections,
+          detections: detections,
+          thumbnail: annotatedImageUrl,
+          annotatedImage: annotatedImageUrl,
+          originalImage: previewUrl,
+          durationMs,
+          classBreakdown: breakdown,
+          rawJson: data,
+        });
       }
     } catch (err) {
-      setError('Analysis failed. Please verify the image format and re-attempt.');
+      console.error('Image analysis failed:', err);
+      let message = err.message || 'Image analysis failed.';
+      if (err.name === 'AbortError') {
+        message = 'Analysis request timed out after 45 seconds. Check if backend is busy.';
+      } else if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+        message = `Unable to reach inference backend at ${settings.backendUrl}. Please ensure FastAPI is running (python backend/app.py).`;
+      }
+      setError(message);
+    } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // Filter detections by current confidence threshold
+  // Reset current workspace
+  const handleReset = () => {
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    setAnalysisResult(null);
+    setError(null);
+    setHoveredDetId(null);
+    setImageMeta(null);
+    setCurrentAnalysis(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Copy raw JSON to clipboard
+  const handleCopyJson = () => {
+    if (!analysisResult?.rawJson) return;
+    navigator.clipboard.writeText(JSON.stringify(analysisResult.rawJson, null, 2));
+    setCopiedJson(true);
+    setTimeout(() => setCopiedJson(false), 2000);
+  };
+
+  // Filter detections by threshold
   const activeDetections = (analysisResult?.detections || []).filter(
-    (d) => d.confidence >= confidenceThreshold
+    (d) => d.confidence >= confidenceFilter
   );
 
   const meanConfidence = activeDetections.length
     ? (
-        activeDetections.reduce((acc, d) => acc + d.confidence, 0) /
+        activeDetections.reduce((sum, d) => sum + d.confidence, 0) /
         activeDetections.length
       ).toFixed(1)
     : 0;
 
-  // Class breakdown
-  const classBreakdown = activeDetections.reduce((acc, d) => {
+  // Real class counts from filtered active detections
+  const activeClassBreakdown = activeDetections.reduce((acc, d) => {
     const cls = d.class || 'plastic';
     acc[cls] = (acc[cls] || 0) + 1;
     return acc;
   }, {});
 
-  // Download telemetry JSON
-  const handleExportTelemetry = () => {
-    if (!analysisResult) return;
-    const telemetry = {
-      imageName: selectedImage?.name || 'Survey_Image',
-      timestamp: new Date().toISOString(),
-      numDetections: activeDetections.length,
-      meanConfidence: `${meanConfidence}%`,
-      debrisDensity: analysisResult.debrisDensity,
-      debrisDensityScore_kg_m2: analysisResult.densityScore,
-      detections: activeDetections,
-    };
-
-    const dataBlob = new Blob([JSON.stringify(telemetry, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `nirmalsagar-telemetry-${Date.now()}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="ns-workbench-stage">
-      {/* Workbench Header */}
+      {/* Header */}
       <div className="ns-workbench-header">
         <div>
-          <h1 className="ns-workbench-title">Image Analysis</h1>
+          <div className="ns-header-title-row">
+            <h1 className="ns-workbench-title">Image Detection</h1>
+            <span className="ns-header-badge">YOLOv11s Segmentation</span>
+          </div>
           <p className="ns-workbench-subtitle">
-            Upload underwater imagery to detect marine debris.
+            Upload underwater imagery to identify, segment, and localize benthic marine debris.
           </p>
         </div>
+
+        {analysisResult && onNavigate && (
+          <div className="ns-header-actions">
+            <button
+              onClick={() => onNavigate('pollution-analysis')}
+              className="ns-btn-secondary"
+              title="Open Pollution Analysis with these detections"
+            >
+              <ShieldAlert size={15} />
+              Pollution Assessment
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* Error Alert */}
       {error && (
-        <div className="ns-workbench-alert">
-          <AlertCircle size={17} />
-          <span>{error}</span>
+        <div className="ns-workbench-alert" role="alert">
+          <AlertCircle size={18} className="ns-alert-icon" />
+          <div className="ns-alert-text">
+            <strong>Inference Notice:</strong> {error}
+          </div>
+          <button
+            onClick={() => setError(null)}
+            className="ns-alert-dismiss"
+            aria-label="Dismiss error"
+          >
+            ×
+          </button>
         </div>
       )}
 
-      {/* Two Column Layout: Main Stage + Telemetry Panel */}
+      {/* Main Grid: Left Viewer/Upload + Right Results Panel */}
       <div className="ns-workbench-grid">
-        {/* Left Column: Upload & Viewer Stage */}
+        {/* Left Column: Stage */}
         <div className="ns-stage-card">
           {!previewUrl ? (
-            /* Empty Upload Box (Screenshot 4) */
+            /* Upload Dropzone */
             <div
               className="ns-upload-box"
               onClick={() => fileInputRef.current?.click()}
               onDragOver={(e) => e.preventDefault()}
-              onDrop={(e) => {
-                e.preventDefault();
-                const file = e.dataTransfer.files?.[0];
-                if (file) {
-                  const syntheticEvent = { target: { files: [file] } };
-                  handleFileChange(syntheticEvent);
-                }
-              }}
+              onDrop={handleDrop}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => e.key === 'Enter' && fileInputRef.current?.click()}
             >
               <div className="ns-upload-icon-circle">
-                <UploadCloud size={28} strokeWidth={1.75} />
+                <UploadCloud size={32} strokeWidth={1.75} />
               </div>
 
               <h3 className="ns-upload-title">Upload Underwater Image</h3>
-              <p className="ns-upload-subtitle">Drag and drop or click to upload</p>
+              <p className="ns-upload-subtitle">
+                Drag and drop your survey photo or click to browse
+              </p>
+              <span className="ns-upload-formats-hint">
+                Supports JPG, JPEG, PNG, WebP • Max 25MB
+              </span>
 
               <div className="ns-upload-btn-group" onClick={(e) => e.stopPropagation()}>
                 <button
@@ -222,83 +360,39 @@ export default function ImageAnalysisWorkbench() {
                   onClick={() => fileInputRef.current?.click()}
                   className="ns-btn-choose"
                 >
-                  Choose Image
-                </button>
-
-                <button
-                  type="button"
-                  disabled={!previewUrl}
-                  className="ns-btn-analyze-disabled"
-                >
-                  <Scan size={15} />
-                  Analyze Image
+                  <FolderOpen size={15} />
+                  Choose File
                 </button>
               </div>
 
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/jpg"
                 style={{ display: 'none' }}
                 onChange={handleFileChange}
               />
             </div>
           ) : (
             /* Active Image Stage with Viewer */
-            <div className="ns-active-viewer">
-              {/* Viewer Control Bar */}
-              <div className="ns-viewer-toolbar">
-                <div className="ns-viewer-file-info">
-                  <FolderOpen size={16} strokeWidth={1.8} />
-                  <span className="ns-file-name">{selectedImage?.name}</span>
+            <div className="ns-active-viewer-container">
+              {/* Top Sub-Bar */}
+              <div className="ns-stage-subbar">
+                <div className="ns-file-meta-pill">
+                  <FolderOpen size={14} />
+                  <span className="ns-file-name-text">{selectedFile?.name || 'Survey Image'}</span>
+                  {imageMeta && (
+                    <span className="ns-file-dim-text">
+                      {imageMeta.width}×{imageMeta.height}
+                    </span>
+                  )}
                 </div>
 
-                <div className="ns-viewer-actions">
-                  {analysisResult && (
-                    <div className="ns-viewmode-toggle">
-                      <button
-                        onClick={() => setViewMode('annotated')}
-                        className={`ns-mode-btn ${viewMode === 'annotated' ? 'active' : ''}`}
-                      >
-                        <Eye size={14} />
-                        Annotated
-                      </button>
-                      <button
-                        onClick={() => setViewMode('original')}
-                        className={`ns-mode-btn ${viewMode === 'original' ? 'active' : ''}`}
-                      >
-                        <EyeOff size={14} />
-                        Original
-                      </button>
-                    </div>
-                  )}
-
+                <div className="ns-stage-actions">
                   <button
-                    onClick={() => setSoundEnabled(!soundEnabled)}
-                    className={`ns-sound-toggle-btn ${soundEnabled ? 'active' : ''}`}
-                    title={soundEnabled ? 'Sonar Sonification: Active' : 'Sonar Sonification: Muted'}
-                    aria-label={soundEnabled ? 'Mute sonar feedback' : 'Enable sonar feedback'}
-                    aria-pressed={soundEnabled}
-                  >
-                    <div className="ns-icon-swap-container">
-                      <span className={`ns-icon-swap ${soundEnabled ? 'ns-icon-visible' : 'ns-icon-hidden'}`}>
-                        <Volume2 size={15} strokeWidth={2} />
-                      </span>
-                      <span className={`ns-icon-swap ${!soundEnabled ? 'ns-icon-visible' : 'ns-icon-hidden'}`}>
-                        <VolumeX size={15} strokeWidth={2} />
-                      </span>
-                    </div>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setPreviewUrl(null);
-                      setSelectedImage(null);
-                      setAnalysisResult(null);
-                      setHoveredDetId(null);
-                    }}
-                    className="ns-reset-btn"
-                    title="Upload different image"
+                    onClick={handleReset}
+                    className="ns-btn-secondary ns-btn-sm"
+                    title="Upload a different image"
                   >
                     <RefreshCw size={13} />
                     New Image
@@ -307,109 +401,82 @@ export default function ImageAnalysisWorkbench() {
                   <button
                     onClick={handleAnalyze}
                     disabled={isAnalyzing}
-                    className="ns-btn-analyze-active"
+                    className="ns-btn-primary ns-btn-sm"
                   >
                     {isAnalyzing ? (
-                      <Loader2 size={15} className="ns-spin" />
+                      <Loader2 size={14} className="ns-spin" />
                     ) : (
-                      <Scan size={15} />
+                      <Scan size={14} />
                     )}
-                    <span>{isAnalyzing ? 'Processing...' : analysisResult ? 'Re-Analyze' : 'Analyze Image'}</span>
+                    <span>
+                      {isAnalyzing
+                        ? 'Analyzing...'
+                        : analysisResult
+                        ? 'Re-Run Detection'
+                        : 'Analyze Image'}
+                    </span>
                   </button>
                 </div>
               </div>
 
-              {/* Image Canvas / View Area */}
-              <div className="ns-image-viewport">
-                {/* Viewport Info Banner */}
-                <div className="ns-viewport-hud-banner">
-                  <div className="ns-hud-item">
-                    <span className="ns-hud-label">FILE</span>
-                    <span className="ns-hud-val">{selectedImage?.name || 'Survey Image'}</span>
-                  </div>
-                  <div className="ns-hud-item">
-                    <span className="ns-hud-label">DETECTOR</span>
-                    <span className="ns-hud-val">YOLOv11s</span>
-                  </div>
-                </div>
-
-                {isAnalyzing && (
-                  <div className="ns-scanning-overlay">
-                    <div className="ns-scanner-line" />
-                    <div className="ns-scanner-badge">
-                      <Loader2 size={16} className="ns-spin" />
-                      Processing segmentation model...
-                    </div>
-                  </div>
-                )}
-
-                <img
-                  src={
-                    analysisResult && viewMode === 'annotated' && analysisResult.annotatedImage
-                      ? analysisResult.annotatedImage
-                      : previewUrl
-                  }
-                  alt="Underwater benthic survey plate"
-                  className="ns-display-image"
-                />
-
-                {/* Overlaid bounding boxes with interactive hover & spotlight */}
-                {analysisResult &&
-                  viewMode === 'annotated' &&
-                  !analysisResult.annotatedImage?.startsWith('data:') && (
-                    <div className="ns-detections-overlay">
-                      {activeDetections.map((det, idx) => (
-                        <div
-                          key={idx}
-                          className={`ns-detection-box class-${det.class || 'plastic'} ${
-                            hoveredDetId === det.id ? 'active-spotlight' : ''
-                          }`}
-                          style={{
-                            left: `${15 + (idx * 24) % 65}%`,
-                            top: `${20 + (idx * 18) % 55}%`,
-                            width: `${120 + (idx * 20)}px`,
-                            height: `${80 + (idx * 15)}px`,
-                          }}
-                          onMouseEnter={() => setHoveredDetId(det.id)}
-                          onMouseLeave={() => setHoveredDetId(null)}
-                        >
-                          <span className="ns-box-tag">
-                            {det.label || det.class} • {det.confidence}%
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-              </div>
+              {/* Robust Image Viewer Component */}
+              <ImageViewer
+                originalSrc={previewUrl}
+                annotatedSrc={analysisResult?.annotatedImage}
+                filename={selectedFile?.name}
+                detections={activeDetections}
+                hoveredDetId={hoveredDetId}
+                onHoverDet={setHoveredDetId}
+                isAnalyzing={isAnalyzing}
+              />
             </div>
           )}
         </div>
 
-        {/* Right Column: Telemetry & Results Panel (Screenshot 4) */}
+        {/* Right Column: Telemetry & Results Panel */}
         <div className="ns-panel-card">
           {!analysisResult ? (
-            /* Screenshot 4: "Waiting for analysis..." empty state */
             <div className="ns-panel-empty">
               <div className="ns-empty-icon-box">
-                <BarChart2 size={26} strokeWidth={1.8} />
+                <BarChart2 size={28} strokeWidth={1.75} />
               </div>
-              <h4 className="ns-empty-title">Waiting for analysis...</h4>
+              <h4 className="ns-empty-title">Awaiting Analysis</h4>
               <p className="ns-empty-desc">
-                Select an underwater image to begin.
+                {previewUrl
+                  ? 'Click "Analyze Image" above to run YOLOv11s object detection.'
+                  : 'Select or drag an underwater image into the upload area to begin.'}
               </p>
+              {backendStatus.isOnline ? (
+                <div className="ns-backend-ready-pill">
+                  <span className="ns-status-dot-green" />
+                  <span>Inference server connected</span>
+                </div>
+              ) : (
+                <div className="ns-backend-offline-pill">
+                  <span className="ns-status-dot-amber" />
+                  <span>Backend status: Offline</span>
+                </div>
+              )}
             </div>
           ) : (
-            /* Real-time Telemetry & Assessment */
             <div className="ns-telemetry-panel">
+              {/* Telemetry Header */}
               <div className="ns-telemetry-header">
-                <div className="ns-status-badge">
-                  <span className="ns-status-indicator" />
-                  ANALYSIS COMPLETE
+                <div>
+                  <div className="ns-status-badge">
+                    <span className="ns-status-indicator" />
+                    ANALYSIS COMPLETE
+                  </div>
+                  {analysisResult.durationMs && (
+                    <span className="ns-latency-tag-small">
+                      {analysisResult.durationMs}ms inference
+                    </span>
+                  )}
                 </div>
                 <span className="ns-timestamp">{analysisResult.timestamp}</span>
               </div>
 
-              {/* Top Metrics Cards */}
+              {/* Summary Metrics */}
               <div className="ns-metrics-grid">
                 <div className="ns-metric-box">
                   <span className="ns-metric-label">Objects Detected</span>
@@ -417,131 +484,168 @@ export default function ImageAnalysisWorkbench() {
                 </div>
                 <div className="ns-metric-box">
                   <span className="ns-metric-label">Mean Confidence</span>
-                  <span className="ns-metric-value">{meanConfidence}%</span>
+                  <span className="ns-metric-value">
+                    {activeDetections.length > 0 ? `${meanConfidence}%` : '—'}
+                  </span>
                 </div>
               </div>
 
-              {/* Debris Density Assessment */}
-              <div className="ns-density-card">
-                <div className="ns-density-top">
-                  <span className="ns-density-label">Debris Density Assessment</span>
-                  <span className="ns-density-score">{analysisResult.densityScore} items/m²</span>
-                </div>
-                <div className="ns-density-title">{analysisResult.debrisDensity}</div>
-              </div>
-
-              {/* Class Breakdown Bars */}
+              {/* Debris Categories Breakdown (Derived from real response) */}
               <div className="ns-breakdown-section">
-                <h5 className="ns-breakdown-title">Debris by Category</h5>
+                <h5 className="ns-breakdown-title">Detections by Category</h5>
 
-                <div className="ns-breakdown-item">
-                  <div className="ns-breakdown-info">
-                    <span>Plastic Waste</span>
-                    <span className="ns-breakdown-count">{classBreakdown.plastic || 0}</span>
+                {Object.keys(activeClassBreakdown).length === 0 ? (
+                  <p className="ns-no-detections-text">
+                    No objects detected above the {confidenceFilter}% confidence threshold.
+                  </p>
+                ) : (
+                  <div className="ns-breakdown-bars-container">
+                    {Object.entries(activeClassBreakdown).map(([clsName, count]) => {
+                      const pct = activeDetections.length
+                        ? Math.round((count / activeDetections.length) * 100)
+                        : 0;
+                      return (
+                        <div key={clsName} className="ns-breakdown-item">
+                          <div className="ns-breakdown-info">
+                            <span className="ns-breakdown-class-name">
+                              {clsName.charAt(0).toUpperCase() + clsName.slice(1).replace('_', ' ')}
+                            </span>
+                            <span className="ns-breakdown-count">
+                              {count} ({pct}%)
+                            </span>
+                          </div>
+                          <div className="ns-progress-track">
+                            <div
+                              className={`ns-progress-bar bar-${clsName.toLowerCase()}`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="ns-progress-track">
-                    <div
-                      className="ns-progress-bar bar-plastic"
-                      style={{
-                        width: `${
-                          activeDetections.length
-                            ? ((classBreakdown.plastic || 0) / activeDetections.length) * 100
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="ns-breakdown-item">
-                  <div className="ns-breakdown-info">
-                    <span>Fishing Gear & Nets</span>
-                    <span className="ns-breakdown-count">{classBreakdown.gear || 0}</span>
-                  </div>
-                  <div className="ns-progress-track">
-                    <div
-                      className="ns-progress-bar bar-gear"
-                      style={{
-                        width: `${
-                          activeDetections.length
-                            ? ((classBreakdown.gear || 0) / activeDetections.length) * 100
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="ns-breakdown-item">
-                  <div className="ns-breakdown-info">
-                    <span>Metal Debris</span>
-                    <span className="ns-breakdown-count">{classBreakdown.metal || 0}</span>
-                  </div>
-                  <div className="ns-progress-track">
-                    <div
-                      className="ns-progress-bar bar-metal"
-                      style={{
-                        width: `${
-                          activeDetections.length
-                            ? ((classBreakdown.metal || 0) / activeDetections.length) * 100
-                            : 0
-                        }%`,
-                      }}
-                    />
-                  </div>
-                </div>
+                )}
               </div>
 
-              {/* Detected Objects List (Interactive Spotlight) */}
+              {/* Real Detection Table */}
               {activeDetections.length > 0 && (
-                <div className="ns-target-registry-section">
-                  <h5 className="ns-breakdown-title">Detected Objects</h5>
-                  <div className="ns-target-chips-container">
-                    {activeDetections.map((det) => (
-                      <div
-                        key={det.id}
-                        className={`ns-target-chip-row class-${det.class || 'plastic'} ${
-                          hoveredDetId === det.id ? 'hovered' : ''
-                        }`}
-                        onMouseEnter={() => setHoveredDetId(det.id)}
-                        onMouseLeave={() => setHoveredDetId(null)}
-                      >
-                        <div className="ns-target-chip-left">
-                          <span className={`ns-target-dot class-${det.class || 'plastic'}`} />
-                          <span className="ns-target-chip-label">{det.label || det.class}</span>
-                        </div>
-                        <span className="ns-target-chip-conf">{det.confidence}%</span>
-                      </div>
-                    ))}
+                <div className="ns-detection-table-section">
+                  <div className="ns-table-header-row">
+                    <h5 className="ns-breakdown-title">Detected Targets</h5>
+                    <span className="ns-table-count-sub">
+                      Showing {activeDetections.length} item{activeDetections.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+
+                  <div className="ns-detection-table-wrap">
+                    <table className="ns-detection-table">
+                      <thead>
+                        <tr>
+                          <th>#</th>
+                          <th>Class</th>
+                          <th>Confidence</th>
+                          <th>Bounding Box</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {activeDetections.map((det) => (
+                          <tr
+                            key={det.id}
+                            className={hoveredDetId === det.id ? 'row-hovered' : ''}
+                            onMouseEnter={() => setHoveredDetId(det.id)}
+                            onMouseLeave={() => setHoveredDetId(null)}
+                          >
+                            <td className="ns-col-id">{det.id}</td>
+                            <td>
+                              <span className={`ns-class-tag tag-${(det.class || '').toLowerCase()}`}>
+                                {det.label || det.class}
+                              </span>
+                            </td>
+                            <td className="ns-col-conf">{det.confidence}%</td>
+                            <td className="ns-col-bbox">
+                              {det.bbox && Array.isArray(det.bbox)
+                                ? `[${det.bbox.map((n) => Math.round(n)).join(', ')}]`
+                                : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
 
-              {/* Sensitivity Slider */}
+              {/* Confidence Sensitivity Filter */}
               <div className="ns-slider-control">
                 <div className="ns-slider-header">
-                  <span className="ns-slider-label">Confidence Threshold</span>
-                  <span className="ns-slider-val">{confidenceThreshold}%</span>
+                  <span className="ns-slider-label">Confidence Filter Threshold</span>
+                  <span className="ns-slider-val">{confidenceFilter}%</span>
                 </div>
                 <input
                   type="range"
-                  min="5"
-                  max="80"
-                  value={confidenceThreshold}
-                  onChange={(e) => setConfidenceThreshold(Number(e.target.value))}
+                  min="1"
+                  max="90"
+                  value={confidenceFilter}
+                  onChange={(e) => setConfidenceFilter(Number(e.target.value))}
                   className="ns-range-slider"
+                  aria-label="Confidence threshold slider"
                 />
               </div>
 
-              {/* Export Telemetry CTA */}
-              <button
-                onClick={handleExportTelemetry}
-                className="ns-export-btn"
-                title="Download JSON telemetry log"
-              >
-                <Download size={15} />
-                Export Telemetry JSON
-              </button>
+              {/* Technical Information Expandable Panel */}
+              <div className="ns-technical-panel">
+                <button
+                  onClick={() => setShowTechnicalInfo(!showTechnicalInfo)}
+                  className="ns-technical-toggle"
+                  type="button"
+                >
+                  <div className="ns-tech-toggle-left">
+                    <Info size={14} />
+                    <span>Technical Response Payload</span>
+                  </div>
+                  {showTechnicalInfo ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </button>
+
+                {showTechnicalInfo && (
+                  <div className="ns-technical-content">
+                    <div className="ns-tech-meta-row">
+                      <span>Status: 200 OK</span>
+                      <span>Total Targets: {analysisResult.numDetections}</span>
+                      {analysisResult.durationMs && <span>Latency: {analysisResult.durationMs}ms</span>}
+                    </div>
+
+                    {analysisResult.rawJson && (
+                      <div className="ns-json-box">
+                        <div className="ns-json-box-header">
+                          <span>Raw JSON Response</span>
+                          <button
+                            onClick={handleCopyJson}
+                            className="ns-copy-btn"
+                            title="Copy raw JSON"
+                          >
+                            {copiedJson ? <Check size={12} /> : <Copy size={12} />}
+                            <span>{copiedJson ? 'Copied' : 'Copy'}</span>
+                          </button>
+                        </div>
+                        <pre className="ns-json-pre">
+                          {JSON.stringify(
+                            {
+                              success: analysisResult.rawJson.success,
+                              num_detections: analysisResult.rawJson.num_detections,
+                              detections: analysisResult.rawJson.detections,
+                              annotated_image: analysisResult.rawJson.annotated_image
+                                ? `[base64 string - ${Math.round(analysisResult.rawJson.annotated_image.length / 1024)} KB]`
+                                : undefined,
+                            },
+                            null,
+                            2
+                          )}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

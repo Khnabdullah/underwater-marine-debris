@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Menu, X } from 'lucide-react';
+import { Menu, X, ArrowRight, ShieldCheck } from 'lucide-react';
 import BrandLogo from '../common/BrandLogo';
 
 export default function LandingNav({ onOpenWorkbench }) {
@@ -27,12 +27,7 @@ export default function LandingNav({ onOpenWorkbench }) {
           <ul className="ns-nav-list">
             <li>
               <a href="#about" onClick={(e) => scrollToSection(e, 'about')} className="ns-nav-link">
-                About
-              </a>
-            </li>
-            <li>
-              <a href="#research" onClick={(e) => scrollToSection(e, 'research')} className="ns-nav-link">
-                Research
+                Capabilities
               </a>
             </li>
             <li>
@@ -40,16 +35,28 @@ export default function LandingNav({ onOpenWorkbench }) {
                 How It Works
               </a>
             </li>
+            <li>
+              <a href="#research" onClick={(e) => scrollToSection(e, 'research')} className="ns-nav-link">
+                Methodology
+              </a>
+            </li>
           </ul>
         </nav>
 
         {/* Right Actions */}
         <div className="ns-nav-right">
+          <div className="ns-nav-status-chip">
+            <span className="ns-status-dot" />
+            <ShieldCheck size={13} className="ns-status-icon" />
+            <span>MODEL READY</span>
+          </div>
+
           <button onClick={onOpenWorkbench} className="ns-btn-primary ns-nav-cta" title="Launch Image Analysis Console">
-            Analyze Image
+            <span>Analyze Image</span>
+            <ArrowRight size={15} strokeWidth={2.2} />
           </button>
 
-          {/* Mobile hamburger with contextual icon cross-fade */}
+          {/* Mobile hamburger */}
           <button
             onClick={() => setMobileOpen(!mobileOpen)}
             className="ns-nav-mobile-toggle"
@@ -67,24 +74,25 @@ export default function LandingNav({ onOpenWorkbench }) {
           </button>
         </div>
 
-      {/* Mobile Drawer */}
-      {mobileOpen && (
-        <div className="ns-nav-mobile-menu">
-          <a href="#about" onClick={(e) => scrollToSection(e, 'about')} className="ns-mobile-link">
-            About
-          </a>
-          <a href="#research" onClick={(e) => scrollToSection(e, 'research')} className="ns-mobile-link">
-            Research
-          </a>
-          <a href="#how-it-works" onClick={(e) => scrollToSection(e, 'how-it-works')} className="ns-mobile-link">
-            How It Works
-          </a>
-          <button onClick={onOpenWorkbench} className="ns-btn-primary" style={{ width: '100%', marginTop: '8px' }}>
-            Analyze Image
-          </button>
-        </div>
-      )}
-    </header>
-  </div>
+        {/* Mobile Drawer */}
+        {mobileOpen && (
+          <div className="ns-nav-mobile-menu">
+            <a href="#about" onClick={(e) => scrollToSection(e, 'about')} className="ns-mobile-link">
+              Capabilities
+            </a>
+            <a href="#how-it-works" onClick={(e) => scrollToSection(e, 'how-it-works')} className="ns-mobile-link">
+              How It Works
+            </a>
+            <a href="#research" onClick={(e) => scrollToSection(e, 'research')} className="ns-mobile-link">
+              Methodology
+            </a>
+            <button onClick={onOpenWorkbench} className="ns-btn-primary" style={{ width: '100%', marginTop: '8px' }}>
+              <span>Analyze Image</span>
+              <ArrowRight size={15} strokeWidth={2.2} />
+            </button>
+          </div>
+        )}
+      </header>
+    </div>
   );
 }

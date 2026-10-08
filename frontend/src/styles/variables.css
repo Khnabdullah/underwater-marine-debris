@@ -1,11 +1,12 @@
 /* ==========================================================================
-   NIRMALSAGAR • REFINED OCEANOGRAPHIC DESIGN TOKENS
-   Awwwards-grade minimal aesthetic grounded in better-* skills
+   NIRMALSAGAR • ADVANCED OCEANOGRAPHIC DESIGN SYSTEM
+   High-end light blue ocean aesthetic with deep abyssal blue accents
    ========================================================================== */
 
 :root {
   /* Typography */
   font-family:
+    "Outfit",
     "Inter",
     -apple-system,
     BlinkMacSystemFont,
@@ -21,123 +22,131 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* === Core Oceanic Palette (OKLCH-grounded) === */
-  --bg-page: #fafcfb;
-  --bg-surface: #ffffff;
-  --bg-soft: #f2f7f4;
-  --bg-soft-subtle: #edf4f0;
-  --bg-card: #ffffff;
-  --bg-sidebar: #f5faf7;
-  --bg-glass: rgba(255, 255, 255, 0.75);
-  --bg-dark-glass: rgba(5, 24, 21, 0.75);
+  /* === Named Brand Palette === */
+  --color-deep-ocean-blue: #031B2E;
+  --color-ocean-blue: #064B6B;
+  --color-marine-blue: #087EA4;
+  --color-cyan-accent: #20C4D9;
+  --color-soft-blue: #DDF5FA;
+  --color-bg-page: #F4FAFC;
+  --color-white: #FFFFFF;
+  --color-text-primary: #06243A;
+  --color-text-secondary: #5B7482;
 
-  /* Deep Abyssal Brand Colors */
-  --teal-primary: #0b3b32;
-  --teal-primary-hover: #072b24;
-  --teal-dark: #051e19;
-  --teal-abyss: #031411;
-  --teal-footer: #02100e;
+  /* === Core Oceanic Background Tokens === */
+  --bg-page: #F4FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-soft: #EBF7FA;
+  --bg-soft-subtle: #F0F9FB;
+  --bg-card: #FFFFFF;
+  --bg-sidebar: #EBF7FA;
+  --bg-glass: rgba(255, 255, 255, 0.88);
+  --bg-dark-glass: rgba(3, 27, 46, 0.85);
 
-  /* Luminous Mint & Seafoam Accents */
-  --mint-accent: #6ee7b7;
-  --mint-bright: #10b981;
-  --mint-glow: rgba(16, 185, 129, 0.18);
-  --mint-dim: rgba(16, 185, 129, 0.1);
-  --teal-tint: #eaf5f0;
-  --teal-tint-active: #d6ece2;
-  --teal-border: #d6e6df;
-  --teal-dashed-border: rgba(11, 59, 50, 0.18);
-  --teal-glow: rgba(11, 59, 50, 0.08);
+  /* Deep Abyssal & Blue Primary Defines */
+  --blue-primary: #087EA4;
+  --blue-primary-hover: #066280;
+  --blue-dark: #064B6B;
+  --blue-abyss: #031B2E;
+  --blue-footer: #031B2E;
 
-  /* === High-Legibility Text Hierarchy (WCAG AAA) === */
-  --text-dark: #0b2e27;
-  --text-body: #425e57;
-  --text-muted: #6f8e86;
-  --text-faint: #9bb5ae;
-  --text-light: #ffffff;
-  --text-light-muted: #b7d6cd;
+  /* Accents & Tints */
+  --cyan-accent: #20C4D9;
+  --cyan-bright: #20C4D9;
+  --cyan-glow: rgba(32, 196, 217, 0.2);
+  --cyan-dim: rgba(32, 196, 217, 0.1);
+  --soft-blue: #DDF5FA;
+  --blue-tint: #E8F5F8;
+  --blue-tint-active: #D1EDF4;
+  --blue-border: #BCE2EE;
+  --blue-dashed-border: rgba(8, 126, 164, 0.2);
+  --blue-glow: rgba(8, 126, 164, 0.12);
 
-  /* === Structural Borders & Elevation (better-ui surfaces.md) === */
-  --border: rgba(11, 59, 50, 0.09);
-  --border-subtle: rgba(11, 59, 50, 0.05);
-  --border-strong: rgba(11, 59, 50, 0.16);
+  /* High-Legibility Text Hierarchy */
+  --text-dark: #06243A;
+  --text-body: #5B7482;
+  --text-muted: #7A95A5;
+  --text-faint: #A3BCCB;
+  --text-light: #FFFFFF;
+  --text-light-muted: #CBE1ED;
 
-  /* Shadow as border (better-ui: 3 layers replace hard solid border) */
+  /* Structural Borders & Shadows */
+  --border: rgba(8, 126, 164, 0.12);
+  --border-subtle: rgba(8, 126, 164, 0.06);
+  --border-strong: rgba(8, 126, 164, 0.22);
+
   --shadow-border:
-    0px 0px 0px 1px oklch(0 0 0 / 0.06), 0px 1px 2px -1px oklch(0 0 0 / 0.06),
-    0px 2px 4px 0px oklch(0 0 0 / 0.04);
+    0px 0px 0px 1px rgba(8, 126, 164, 0.08), 0px 1px 2px -1px rgba(8, 126, 164, 0.06),
+    0px 2px 4px 0px rgba(8, 126, 164, 0.04);
   --shadow-border-hover:
-    0px 0px 0px 1px oklch(0 0 0 / 0.08), 0px 1px 2px -1px oklch(0 0 0 / 0.08),
-    0px 2px 4px 0px oklch(0 0 0 / 0.06);
+    0px 0px 0px 1px rgba(8, 126, 164, 0.15), 0px 1px 3px -1px rgba(8, 126, 164, 0.1),
+    0px 3px 6px 0px rgba(8, 126, 164, 0.06);
 
-  /* Image outlines (better-ui non-negotiable: pure black in light, pure white in dark) */
-  --image-outline: oklch(0 0 0 / 0.1);
-  --image-outline-dark: oklch(1 0 0 / 0.1);
+  --image-outline: rgba(3, 27, 46, 0.08);
+  --image-outline-dark: rgba(255, 255, 255, 0.1);
 
-  /* Precise Layered Shadows (Elevation without heavy black borders) */
-  --shadow-xs: 0 1px 2px rgba(11, 46, 39, 0.03);
+  --shadow-xs: 0 1px 2px rgba(3, 27, 46, 0.03);
   --shadow-sm:
-    0 2px 5px rgba(11, 46, 39, 0.04), 0 1px 2px rgba(11, 46, 39, 0.02);
+    0 2px 5px rgba(3, 27, 46, 0.04), 0 1px 2px rgba(3, 27, 46, 0.02);
   --shadow-card:
-    0 4px 16px rgba(11, 46, 39, 0.05), 0 1px 3px rgba(11, 46, 39, 0.03);
+    0 8px 24px -4px rgba(3, 27, 46, 0.06), 0 1px 3px rgba(3, 27, 46, 0.03);
   --shadow-hover:
-    0 12px 32px rgba(11, 46, 39, 0.08), 0 2px 6px rgba(11, 46, 39, 0.03);
+    0 16px 36px -6px rgba(3, 27, 46, 0.12), 0 2px 6px rgba(3, 27, 46, 0.04);
   --shadow-pop:
-    0 20px 48px rgba(11, 46, 39, 0.12), 0 4px 12px rgba(11, 46, 39, 0.04);
+    0 24px 56px rgba(3, 27, 46, 0.16), 0 4px 12px rgba(3, 27, 46, 0.05);
 
-  /* === Concentric Mathematical Radii (better-ui: outer = inner + padding) === */
-  --radius-inner-sm: 6px;
-  --radius-inner-md: 8px;
-  --radius-outer-md: 16px;
-  --radius-outer-lg: 20px;
-  --radius-outer-xl: 24px;
-
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
+  /* Radii */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
   --radius-full: 9999px;
 
-  /* === Typography System (better-typography) === */
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  /* Typography */
+  --font-sans: "Outfit", "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* === Timing & Tactile Easing Curves (better-ui) === */
+  /* Easing & Transitions */
   --ease-spring: cubic-bezier(0.2, 0, 0, 1);
   --ease-out: cubic-bezier(0, 0, 0.2, 1);
   --transition-fast: 150ms cubic-bezier(0.2, 0, 0, 1);
   --transition-smooth: 240ms cubic-bezier(0.2, 0, 0, 1);
 
-  /* Focus Indicator Ring (better-accessibility) */
-  --focus-ring: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--mint-bright);
+  /* Focus Indicator Ring */
+  --focus-ring: 0 0 0 2px var(--bg-surface), 0 0 0 4px var(--cyan-bright);
 
-  /* Compatibility aliases */
-  --accent: var(--teal-primary);
-  --accent-hover: var(--teal-primary-hover);
-  --text-primary: var(--text-dark);
-  --text-secondary: var(--text-body);
+  /* Compatibility aliases for older components */
+  --teal-primary: var(--blue-primary);
+  --teal-primary-hover: var(--blue-primary-hover);
+  --teal-dark: var(--blue-dark);
+  --teal-abyss: var(--blue-abyss);
+  --teal-footer: var(--blue-footer);
+  --teal-tint: var(--blue-tint);
+  --mint-accent: var(--cyan-accent);
+  --mint-bright: var(--cyan-bright);
+  --accent: var(--blue-primary);
+  --accent-hover: var(--blue-primary-hover);
+  --accent-light: var(--blue-tint);
+  --bg-muted: var(--bg-soft);
 }
 
-/* better-ui: global image outline rule */
 img {
   outline: 1px solid var(--image-outline);
   outline-offset: -1px;
 }
 
-/* better-ui: tactile scale on press for all buttons */
 button {
   transition-property:
-    scale, opacity, background-color, color, border-color, box-shadow;
-  transition-duration: 150ms;
+    transform, scale, opacity, background-color, color, border-color, box-shadow;
+  transition-duration: 180ms;
   transition-timing-function: ease-out;
 }
 
 button:active:not(:disabled) {
-  scale: 0.96;
+  transform: scale(0.97);
 }
 
-/* Accessibility: Respect user's motion preferences */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

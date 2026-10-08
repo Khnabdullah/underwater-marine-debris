@@ -8,13 +8,13 @@ export default function LandingFooter() {
         <div className="ns-footer-left">
           <BrandLogo theme="light" size="md" />
           <p className="ns-footer-tagline">
-            Underwater marine debris detection and density mapping.
+            Autonomous underwater marine debris detection, segmentation, and density mapping.
           </p>
         </div>
 
         <div className="ns-footer-right">
           <p className="ns-footer-copyright">
-            © NirmalSagar. All rights reserved.
+            © NirmalSagar. All rights reserved. Oceanographic AI Technology.
           </p>
         </div>
       </div>
