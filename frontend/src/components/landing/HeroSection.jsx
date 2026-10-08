@@ -5,7 +5,7 @@ const sliderImages = [
   '/plastic-crisis.png',
   '/plastic-bag.png',
   '/hero-underwater-rov.jpg',
-  '/benthic-sonar-grid.jpg'
+  '/new_image_debris.png'
 ];
 
 export default function HeroSection({ onOpenWorkbench }) {

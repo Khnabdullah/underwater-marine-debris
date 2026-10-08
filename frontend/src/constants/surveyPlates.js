@@ -34,8 +34,8 @@ export const SURVEY_PLATES = {
   'plate-03': {
     id: 'plate-03',
     label: 'Plate 03: Multibeam Bathymetry',
-    rawUrl: '/benthic-sonar-grid.jpg',
-    annotatedUrl: '/benthic-sonar-grid.jpg',
+    rawUrl: '/new_image_debris.png',
+    annotatedUrl: '/new_image_debris.png',
     location: 'Indian Ocean Abyssal Trench, 840m',
     baseDetections: [
       { id: 1, class: 'metal', label: 'Submerged Metallic Drum', confidence: 92.4, area: 1.80 },
